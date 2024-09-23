@@ -16,18 +16,8 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
-  int status = system(cmd);
-  if(status == -1)
-  {
-    return false;
-  }
-  if(WIFEXITED(status) && WEXITSTATUS(status) == 0)
-  {
-    return true;
-  }
-  else{
-    return false;
-  }
+  int status=system(cmd);
+  return status==0;
 }
 
 /**
@@ -68,32 +58,30 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
-    va_end(args);
-    __pid_t pid = fork();
-    if(pid < 0)
+    int status;
+    fflush(stdout);
+    pid_t pid=fork();
+    if(pid == 0)
     {
-        perror("fork");
-        return false;
+        i=execv(command[0],command);
+        exit(i);
     }
-    else if(pid == 0)
+    else if (pid < 0)
     {
-        execv(command[0], command);
-        perror("execv");
-        exit(EXIT_FAILURE);
+        va_end(args);
+        return false;
     }
     else
     {
-        int status;
-        waitpid(pid, &status, 0);
-        if(WIFEXITED(status) && WEXITSTATUS(status) == 0)
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
+        i=waitpid(pid, &status,0);
     }
+    va_end(args);
+    if(i == -1 || ((int) WEXITSTATUS(status) != 0))
+    {
+        return false;
+    }
+
+    return true;
 }
 
 /**
@@ -125,44 +113,35 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *
 */
 
-    va_end(args);
-    __pid_t pid = fork();
-    if(pid < 0)
-    {
-        perror("fork");
-        return false;
-    }
-    else if(pid == 0)
-    {
-        int fd = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        if(fd < 0 )
+   int status,fd;
+   fflush(stdout);
+   pid_t pid=fork();
+   if(pid == 0)
+   {
+       fd=open(outputfile,O_WRONLY | O_CREAT | O_TRUNC, 0644);
+       if(fd == -1)
         {
-            perror("open");
-            exit(EXIT_FAILURE);
+            exit(-1);
         }
-        if(dup2(fd,STDOUT_FILENO) < 0)
-        {
-            perror("dup2");
-            close(fd);
-            exit(EXIT_FAILURE);
-        }
+        dup2(fd, STDOUT_FILENO);
         close(fd);
-        execv(command[0], command);
-        perror("execv");
-        exit(EXIT_FAILURE);
-    }
-    else
-    {
-        int status;
-        waitpid(pid, &status, 0);
-        if(WIFEXITED(status) && WEXITSTATUS(status) == 0)
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
-    }
+        i = execv(command[0], command);
+        exit(i);
+   }
+   else if (pid < 0)
+   {
+       va_end(args);
+       return false;
+   }
+   else
+   {
+       i=waitpid(pid, &status,0);
+   }
+   va_end(args);
+   if(i == -1 || ((int) WEXITSTATUS(status) != 0))
+   {
+    return false;
+   }
+   return true;
     
 }
